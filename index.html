@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reelock — lock a video into a vault file</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#14161a;
+    --panel:#1c1f24;
+    --panel-2:#20242a;
+    --line:#30343b;
+    --text:#ede9e3;
+    --muted:#8b8f96;
+    --brass:#c9a24b;
+    --brass-dim:#8a7238;
+    --err:#d1574a;
+    --ok:#6fae7f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 20% -10%, #23262c 0%, transparent 45%),
+      var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    min-height:100vh;
+    display:flex;
+    justify-content:center;
+    padding:48px 20px 80px;
+  }
+  .wrap{ width:100%; max-width:640px; }
+  header{ margin-bottom:36px; }
+  .mark{
+    display:inline-flex; align-items:center; gap:10px;
+    color:var(--brass); font-family:'IBM Plex Mono', monospace;
+    font-size:13px; letter-spacing:.02em; margin-bottom:18px;
+  }
+  .mark svg{ width:18px; height:18px; }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:clamp(30px, 6vw, 42px);
+    line-height:1.1;
+    margin:0 0 14px;
+  }
+  header p{
+    color:var(--muted);
+    font-size:15px;
+    line-height:1.6;
+    max-width:52ch;
+    margin:0;
+  }
+  .tabs{
+    display:flex;
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    margin:32px 0 20px;
+  }
+  .tab{
+    flex:1;
+    padding:13px 10px;
+    text-align:center;
+    background:var(--panel);
+    color:var(--muted);
+    font-size:14px;
+    font-weight:500;
+    cursor:pointer;
+    border:none;
+    font-family:inherit;
+    transition:background .15s, color .15s;
+  }
+  .tab + .tab{ border-left:1px solid var(--line); }
+  .tab.active{ background:var(--brass); color:#1a1a1a; }
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:28px;
+  }
+  .panel + .panel{ margin-top:16px; }
+
+  .drop{
+    border:1.5px dashed var(--line);
+    border-radius:10px;
+    padding:36px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.drag{ border-color:var(--brass-dim); background:var(--panel-2); }
+  .drop input{ display:none; }
+  .drop .icon{ font-size:26px; margin-bottom:10px; opacity:.8; }
+  .drop .label{ font-size:14px; color:var(--text); margin-bottom:4px; }
+  .drop .sub{ font-size:12.5px; color:var(--muted); font-family:'IBM Plex Mono', monospace; }
+
+  .filerow{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px; margin-top:16px; font-size:13.5px; color:var(--muted);
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .filerow strong{ color:var(--text); font-family:'IBM Plex Sans', sans-serif; }
+
+  .opts{
+    margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:12px;
+  }
+  .field{ display:flex; flex-direction:column; gap:6px; }
+  .field.full{ grid-column:1 / -1; }
+  .field label{
+    font-size:12px; color:var(--muted); font-family:'IBM Plex Mono', monospace;
+  }
+  .field select, .field input[type="password"], .field input[type="text"]{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:7px;
+    padding:10px 12px;
+    font-size:14px;
+    font-family:'IBM Plex Sans', sans-serif;
+  }
+  .field select:focus, .field input:focus{ outline:1px solid var(--brass-dim); }
+  .hint{ font-size:11.5px; color:var(--muted); margin-top:2px; }
+
+  .row{ display:flex; gap:10px; margin-top:20px; }
+  button.primary{
+    flex:1;
+    background:var(--brass);
+    color:#1a1a1a;
+    border:none;
+    padding:13px 18px;
+    border-radius:8px;
+    font-size:14.5px;
+    font-weight:600;
+    font-family:inherit;
+    cursor:pointer;
+    transition:filter .15s, opacity .15s;
+  }
+  button.primary:hover{ filter:brightness(1.08); }
+  button.primary:disabled{ opacity:.45; cursor:not-allowed; filter:none; }
+
+  .progress-wrap{ margin-top:20px; display:none; }
+  .progress-wrap.show{ display:block; }
+  .progress-track{
+    height:6px; border-radius:3px; background:var(--panel-2);
+    border:1px solid var(--line); overflow:hidden;
+  }
+  .progress-fill{
+    height:100%; width:0%; background:var(--brass);
+    transition:width .25s ease;
+  }
+  .status{
+    margin-top:10px; font-size:12.5px; color:var(--muted);
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .status.err{ color:var(--err); }
+  .status.ok{ color:var(--ok); }
+
+  .result{ display:none; margin-top:22px; padding-top:20px; border-top:1px solid var(--line); }
+  .result.show{ display:block; }
+  .result h3{ font-size:14px; margin:0 0 10px; font-weight:600; }
+  .stat-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;
+  }
+  .stat{
+    background:var(--panel-2); border:1px solid var(--line);
+    border-radius:8px; padding:12px 14px;
+  }
+  .stat .num{ font-family:'IBM Plex Mono', monospace; font-size:16px; color:var(--brass); }
+  .stat .lbl{ font-size:11.5px; color:var(--muted); margin-top:2px; }
+  a.download{
+    display:block; text-align:center;
+    background:transparent; border:1px solid var(--brass);
+    color:var(--brass); text-decoration:none;
+    padding:12px 18px; border-radius:8px; font-size:14px; font-weight:500;
+    transition:background .15s, color .15s;
+  }
+  a.download:hover{ background:var(--brass); color:#1a1a1a; }
+  video.preview{
+    width:100%; border-radius:8px; margin-top:14px; background:#000;
+    display:none;
+  }
+  video.preview.show{ display:block; }
+
+  footer{
+    margin-top:34px; font-size:12px; color:var(--muted);
+    line-height:1.7; font-family:'IBM Plex Mono', monospace;
+  }
+  footer strong{ color:var(--text); font-family:'IBM Plex Sans', sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      REELOCK
+    </div>
+    <h1>Lock a video into a vault file — and back.</h1>
+    <p>Runs entirely in your browser. Lock encodes a video down to a size you choose and wraps it in a Reelock file that nothing else recognizes. Unlock reverses it back into a playable video.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="lock">Lock — video → .rlck</button>
+    <button class="tab" data-tab="unlock">Unlock — .rlck → video</button>
+  </div>
+
+  <!-- LOCK PANEL -->
+  <section class="panel" id="lockPanel">
+    <div class="drop" id="lockDrop">
+      <div class="icon">🎞️</div>
+      <div class="label">Drop a video, or tap to choose one</div>
+      <div class="sub">MP4 · MOV · WEBM · MKV</div>
+      <input type="file" id="lockInput" accept="video/*">
+    </div>
+    <div class="filerow" id="lockFileRow" style="display:none;">
+      <span>Selected: <strong id="lockFileName"></strong></span>
+      <span id="lockFileSize"></span>
+    </div>
+
+    <div class="opts">
+      <div class="field">
+        <label for="lockRatio">Target size</label>
+        <select id="lockRatio">
+          <option value="2">~1/2 of original — higher quality</option>
+          <option value="3" selected>~1/3 of original — balanced</option>
+          <option value="4">~1/4 of original — smaller</option>
+          <option value="6">~1/6 of original — smallest</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="lockRes">Resolution</label>
+        <select id="lockRes">
+          <option value="0" selected>Keep original</option>
+          <option value="1080">Downscale to 1080p</option>
+          <option value="720">Downscale to 720p</option>
+          <option value="480">Downscale to 480p</option>
+          <option value="360">Downscale to 360p</option>
+        </select>
+      </div>
+      <div class="field full">
+        <label for="lockPass">Passcode (optional)</label>
+        <input type="password" id="lockPass" placeholder="Leave blank to skip">
+        <div class="hint">If set, the same passcode is required to unlock this file later. Anthropic/Reelock cannot recover a lost passcode.</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="lockBtn" disabled>Lock video</button>
+    </div>
+    <div class="progress-wrap" id="lockProgressWrap">
+      <div class="progress-track"><div class="progress-fill" id="lockProgressFill"></div></div>
+      <div class="status" id="lockStatus">Warming up FFmpeg…</div>
+    </div>
+    <div class="result" id="lockResult">
+      <h3>Vault file ready</h3>
+      <div class="stat-grid">
+        <div class="stat"><div class="num" id="lockOrigSize">—</div><div class="lbl">original size</div></div>
+        <div class="stat"><div class="num" id="lockNewSize">—</div><div class="lbl">locked size</div></div>
+      </div>
+      <a class="download" id="lockDownload" download>Download .rlck file</a>
+    </div>
+  </section>
+
+  <!-- UNLOCK PANEL -->
+  <section class="panel" id="unlockPanel" style="display:none;">
+    <div class="drop" id="unlockDrop">
+      <div class="icon">🔓</div>
+      <div class="label">Drop a .rlck file, or tap to choose one</div>
+      <div class="sub">.RLCK</div>
+      <input type="file" id="unlockInput" accept=".rlck">
+    </div>
+    <div class="filerow" id="unlockFileRow" style="display:none;">
+      <span>Selected: <strong id="unlockFileName"></strong></span>
+      <span id="unlockFileSize"></span>
+    </div>
+
+    <div class="opts">
+      <div class="field full">
+        <label for="unlockPass">Passcode</label>
+        <input type="password" id="unlockPass" placeholder="Leave blank if none was set">
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="unlockBtn" disabled>Unlock file</button>
+    </div>
+    <div class="progress-wrap" id="unlockProgressWrap">
+      <div class="status" id="unlockStatus">Reading vault file…</div>
+    </div>
+    <div class="result" id="unlockResult">
+      <h3>Video restored</h3>
+      <video class="preview" id="unlockPreview" controls></video>
+      <a class="download" id="unlockDownload" download style="margin-top:14px;">Download video</a>
+    </div>
+  </section>
+
+  <footer>
+    <strong>How it works —</strong> Lock re-encodes your video with FFmpeg.wasm at a bitrate and resolution calculated from your chosen settings, then wraps the encoded bytes with a small header and a byte-level scramble under a custom .rlck extension. If you set a passcode, the scramble key is derived from it, so the exact same passcode is needed to unlock. Nothing is uploaded — all processing happens on your device.
+  </footer>
+
+</div>
+
+<script src="https://unpkg.com/@ffmpeg/[email protected]/dist/umd/ffmpeg.js"></script>
+<script src="https://unpkg.com/@ffmpeg/[email protected]/dist/umd/index.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  const MAGIC = "RLCK2"; // vault file signature (v2 — passcode aware)
+
+  // ---------- tabs ----------
+  const tabs = document.querySelectorAll(".tab");
+  const lockPanel = document.getElementById("lockPanel");
+  const unlockPanel = document.getElementById("unlockPanel");
+  tabs.forEach(t => t.addEventListener("click", () => {
+    tabs.forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    if (t.dataset.tab === "lock") {
+      lockPanel.style.display = "block";
+      unlockPanel.style.display = "none";
+    } else {
+      lockPanel.style.display = "none";
+      unlockPanel.style.display = "block";
+    }
+  }));
+
+  function fmtBytes(n){
+    if (n < 1024) return n + " B";
+    if (n < 1024*1024) return (n/1024).toFixed(1) + " KB";
+    return (n/(1024*1024)).toFixed(2) + " MB";
+  }
+
+  async function deriveKey(passcode){
+    const enc = new TextEncoder().encode(passcode || "");
+    const digest = await crypto.subtle.digest("SHA-256", enc);
+    return new Uint8Array(digest); // 32 bytes, used as repeating XOR key
+  }
+
+  function xorBytes(bytes, key){
+    const out = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++){
+      out[i] = bytes[i] ^ key[i % key.length];
+    }
+    return out;
+  }
+
+  // ---------- shared ffmpeg instance ----------
+  let ffmpeg = null;
+  let ffmpegLoading = null;
+  async function getFFmpeg(){
+    if (ffmpeg) return ffmpeg;
+    if (!ffmpegLoading){
+      ffmpegLoading = (async () => {
+        const { FFmpeg } = FFmpegWASM;
+        const { toBlobURL } = FFmpegUtil;
+        const instance = new FFmpeg();
+        const baseURL = "https://unpkg.com/@ffmpeg/[email protected]/dist/umd";
+        await instance.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+        });
+        ffmpeg = instance;
+        return instance;
+      })();
+    }
+    return ffmpegLoading;
+  }
+
+  function getVideoDuration(file){
+    return new Promise((resolve, reject) => {
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      v.onloadedmetadata = () => { resolve(v.duration || 0); URL.revokeObjectURL(v.src); };
+      v.onerror = () => reject(new Error("Could not read video metadata"));
+      v.src = URL.createObjectURL(file);
+    });
+  }
+
+  // ===================== LOCK =====================
+  const lockDrop = document.getElementById("lockDrop");
+  const lockInput = document.getElementById("lockInput");
+  const lockFileRow = document.getElementById("lockFileRow");
+  const lockFileName = document.getElementById("lockFileName");
+  const lockFileSize = document.getElementById("lockFileSize");
+  const lockRatio = document.getElementById("lockRatio");
+  const lockRes = document.getElementById("lockRes");
+  const lockPass = document.getElementById("lockPass");
+  const lockBtn = document.getElementById("lockBtn");
+  const lockProgressWrap = document.getElementById("lockProgressWrap");
+  const lockProgressFill = document.getElementById("lockProgressFill");
+  const lockStatus = document.getElementById("lockStatus");
+  const lockResult = document.getElementById("lockResult");
+  const lockOrigSize = document.getElementById("lockOrigSize");
+  const lockNewSize = document.getElementById("lockNewSize");
+  const lockDownload = document.getElementById("lockDownload");
+
+  let lockFile = null;
+
+  lockDrop.addEventListener("click", () => lockInput.click());
+  ["dragover","dragenter"].forEach(evt => lockDrop.addEventListener(evt, e => { e.preventDefault(); lockDrop.classList.add("drag"); }));
+  ["dragleave","drop"].forEach(evt => lockDrop.addEventListener(evt, e => { e.preventDefault(); lockDrop.classList.remove("drag"); }));
+  lockDrop.addEventListener("drop", e => { if (e.dataTransfer.files[0]) setLockFile(e.dataTransfer.files[0]); });
+  lockInput.addEventListener("change", e => { if (e.target.files[0]) setLockFile(e.target.files[0]); });
+
+  function setLockFile(file){
+    lockFile = file;
+    lockFileName.textContent = file.name;
+    lockFileSize.textContent = fmtBytes(file.size);
+    lockFileRow.style.display = "flex";
+    lockBtn.disabled = false;
+    lockResult.classList.remove("show");
+  }
+
+  lockBtn.addEventListener("click", async () => {
+    if (!lockFile) return;
+    lockBtn.disabled = true;
+    lockProgressWrap.classList.add("show");
+    lockResult.classList.remove("show");
+    lockProgressFill.style.width = "5%";
+    lockStatus.className = "status";
+    lockStatus.textContent = "Warming up FFmpeg…";
+
+    try {
+      const inst = await getFFmpeg();
+      inst.on("progress", ({ progress }) => {
+        const pct = Math.min(95, Math.round(progress * 90) + 5);
+        lockProgressFill.style.width = pct + "%";
+      });
+
+      lockStatus.textContent = "Reading video length…";
+      let duration = 0;
+      try { duration = await getVideoDuration(lockFile); } catch(e) { duration = 0; }
+      if (!duration || !isFinite(duration)) duration = 30; // fallback estimate
+
+      const ratio = parseInt(lockRatio.value, 10) || 3;
+      const targetTotalBits = (lockFile.size * 8) / ratio;
+      const audioBps = 96000;
+      let videoBps = Math.floor(targetTotalBits / duration) - audioBps;
+      if (videoBps < 100000) videoBps = 100000;
+
+      lockStatus.textContent = `Encoding at ~${Math.round(videoBps/1000)} kbps video…`;
+
+      const inName = "input" + (lockFile.name.match(/\.\w+$/)?.[0] || ".mp4");
+      const outName = "output.mp4";
+      const { fetchFile } = FFmpegUtil;
+      await inst.writeFile(inName, await fetchFile(lockFile));
+
+      const targetH = parseInt(lockRes.value, 10) || 0;
+      const args = [
+        "-i", inName,
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-b:v", videoBps + "",
+        "-maxrate", Math.round(videoBps*1.3) + "",
+        "-bufsize", Math.round(videoBps*2) + "",
+      ];
+      if (targetH > 0) args.push("-vf", `scale=-2:${targetH}`);
+      args.push("-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", outName);
+
+      await inst.exec(args);
+
+      lockStatus.textContent = "Wrapping into vault file…";
+      const data = await inst.readFile(outName);
+      const encodedBytes = new Uint8Array(data.buffer || data);
+
+      const passcode = lockPass.value || "";
+      const key = await deriveKey(passcode);
+      const passHashFull = await deriveKey(passcode); // sha256(passcode) again for check bytes (cheap, same digest)
+      const passCheck = passHashFull.slice(0, 4);
+
+      // header: MAGIC(5) | passCheck(4) | u16 nameLen | name(utf8) | u32 payloadLen
+      const origName = lockFile.name.replace(/\.[^/.]+$/, "") + ".mp4";
+      const nameBytes = new TextEncoder().encode(origName);
+      const header = new Uint8Array(5 + 4 + 2 + nameBytes.length + 4);
+      let off = 0;
+      header.set(new TextEncoder().encode(MAGIC), off); off += 5;
+      header.set(passCheck, off); off += 4;
+      new DataView(header.buffer).setUint16(off, nameBytes.length, false); off += 2;
+      header.set(nameBytes, off); off += nameBytes.length;
+      new DataView(header.buffer).setUint32(off, encodedBytes.length, false); off += 4;
+
+      const scrambled = xorBytes(encodedBytes, key);
+      const finalBytes = new Uint8Array(header.length + scrambled.length);
+      finalBytes.set(header, 0);
+      finalBytes.set(scrambled, header.length);
+
+      const blob = new Blob([finalBytes], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const baseName = lockFile.name.replace(/\.[^/.]+$/, "");
+      lockDownload.href = url;
+      lockDownload.download = baseName + ".rlck";
+
+      lockOrigSize.textContent = fmtBytes(lockFile.size);
+      lockNewSize.textContent = fmtBytes(finalBytes.length);
+      lockProgressFill.style.width = "100%";
+      lockStatus.className = "status ok";
+      lockStatus.textContent = "Done.";
+      lockResult.classList.add("show");
+
+      await inst.deleteFile(inName);
+      await inst.deleteFile(outName);
+    } catch (err) {
+      console.error(err);
+      lockStatus.className = "status err";
+      lockStatus.textContent = "Something went wrong: " + (err.message || err);
+    } finally {
+      lockBtn.disabled = false;
+    }
+  });
+
+  // ===================== UNLOCK =====================
+  const unlockDrop = document.getElementById("unlockDrop");
+  const unlockInput = document.getElementById("unlockInput");
+  const unlockFileRow = document.getElementById("unlockFileRow");
+  const unlockFileName = document.getElementById("unlockFileName");
+  const unlockFileSize = document.getElementById("unlockFileSize");
+  const unlockPass = document.getElementById("unlockPass");
+  const unlockBtn = document.getElementById("unlockBtn");
+  const unlockProgressWrap = document.getElementById("unlockProgressWrap");
+  const unlockStatus = document.getElementById("unlockStatus");
+  const unlockResult = document.getElementById("unlockResult");
+  const unlockDownload = document.getElementById("unlockDownload");
+  const unlockPreview = document.getElementById("unlockPreview");
+
+  let unlockFile = null;
+
+  unlockDrop.addEventListener("click", () => unlockInput.click());
+  ["dragover","dragenter"].forEach(evt => unlockDrop.addEventListener(evt, e => { e.preventDefault(); unlockDrop.classList.add("drag"); }));
+  ["dragleave","drop"].forEach(evt => unlockDrop.addEventListener(evt, e => { e.preventDefault(); unlockDrop.classList.remove("drag"); }));
+  unlockDrop.addEventListener("drop", e => { if (e.dataTransfer.files[0]) setUnlockFile(e.dataTransfer.files[0]); });
+  unlockInput.addEventListener("change", e => { if (e.target.files[0]) setUnlockFile(e.target.files[0]); });
+
+  function setUnlockFile(file){
+    unlockFile = file;
+    unlockFileName.textContent = file.name;
+    unlockFileSize.textContent = fmtBytes(file.size);
+    unlockFileRow.style.display = "flex";
+    unlockBtn.disabled = false;
+    unlockResult.classList.remove("show");
+  }
+
+  unlockBtn.addEventListener("click", async () => {
+    if (!unlockFile) return;
+    unlockBtn.disabled = true;
+    unlockProgressWrap.classList.add("show");
+    unlockResult.classList.remove("show");
+    unlockStatus.className = "status";
+    unlockStatus.textContent = "Reading vault file…";
+
+    try {
+      const buf = new Uint8Array(await unlockFile.arrayBuffer());
+      const gotMagic = new TextDecoder().decode(buf.slice(0, 5));
+      if (gotMagic !== MAGIC) throw new Error("Not a valid .rlck file");
+
+      let off = 5;
+      const passCheckStored = buf.slice(off, off + 4); off += 4;
+      const nameLen = new DataView(buf.buffer).getUint16(off, false); off += 2;
+      const name = new TextDecoder().decode(buf.slice(off, off + nameLen)); off += nameLen;
+      const payloadLen = new DataView(buf.buffer).getUint32(off, false); off += 4;
+      const scrambled = buf.slice(off, off + payloadLen);
+
+      const passcode = unlockPass.value || "";
+      const key = await deriveKey(passcode);
+      const passCheckEntered = key.slice(0, 4);
+
+      let mismatch = false;
+      for (let i = 0; i < 4; i++){ if (passCheckStored[i] !== passCheckEntered[i]) { mismatch = true; break; } }
+      if (mismatch) throw new Error("Wrong passcode for this file");
+
+      unlockStatus.textContent = "Reversing scramble…";
+      const restored = xorBytes(scrambled, key);
+
+      const blob = new Blob([restored], { type: "video/mp4" });
+      const url = URL.createObjectURL(blob);
+
+      unlockPreview.src = url;
+      unlockPreview.classList.add("show");
+      unlockDownload.href = url;
+      unlockDownload.download = name || "restored.mp4";
+
+      unlockStatus.className = "status ok";
+      unlockStatus.textContent = "Done.";
+      unlockResult.classList.add("show");
+    } catch (err) {
+      console.error(err);
+      unlockStatus.className = "status err";
+      unlockStatus.textContent = "Something went wrong: " + (err.message || err);
+    } finally {
+      unlockBtn.disabled = false;
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
